@@ -1,0 +1,18 @@
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+
+def circo(source, target, data=None, ax=None, cmap=):
+    """ Draw a circo
+    @ Arguments:
+    - source/target: two array of the same size that contains 
+      every link shown in the circo. Alternatively if data is
+      not None, two strings that correspond to column names 
+      in the dataframe data.
+    """
+
+    if data is not None:
+        source = data[source]
+        target = data[target]
+
+    patch = patches.PathPatch(path, facecolor='none', edgecolor=
+    ax.plot(
