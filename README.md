@@ -1,2 +1,2 @@
-# circooo
-Draw circos
+# Chordialement
+Draw a chord diagram. 
