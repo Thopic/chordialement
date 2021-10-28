@@ -21,8 +21,8 @@ The `chord_diagram` function plot a diagram colored by categories (ie the color 
 
 ``` python
 import pandas as pd
-import pyreadstat
-from chordialement import chord_diagram
+import numpy as np
+from chordialement import chord_diagram, colored_chords
 
 rng = np.random.default_rng()
 df = pd.DataFrame()
