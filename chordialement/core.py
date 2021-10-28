@@ -1,6 +1,8 @@
+
 import matplotlib.pyplot as plt
 import matplotlib.collections as mcoll
 from matplotlib import colors
+from matplotlib.lines import Line2D
 
 import warnings
 import seaborn as sns
@@ -66,175 +68,291 @@ def draw_chord(A, B, ax=None, color_start="b", color_end="r",
 
 
 def draw_arc_circle(start, end, color="b", radius=1, ax=None,
-                    thickness=0.1, precision=1000):
+                    thickness=0.1, precision=1000, **kwargs):
     ts = np.linspace(start, end, precision)
     poly_nodes = ([position_circle(t, radius=radius) for t in ts] +
                   [position_circle(t, radius=radius+thickness)
                    for t in ts[::-1]])
     x, y = zip(*poly_nodes)
-    ax.fill(x, y, color=color)
+    ax.fill(x, y, color=color, **kwargs)
 
 
 def add_text_circle(x, txt, radius=1, ax=None, **kwargs):
+    """ Add text on the border of the circle, in the right orientation """
     ax.text(*position_circle(x, radius=radius),
-            txt, rotation=360*x, ha='center', va='center', **kwargs)
+            txt, rotation=(360*x - 180 if 0.25 < x < 0.75 else 360*x),
+            ha='right' if 0.75 > x > 0.25 else 'left',
+            va='top' if 0.75 > x > 0.25  else 'bottom',
+            rotation_mode='anchor', **kwargs)
 
 
-def order_data(nodes, links, order=None):
+def order_data(data, categories, pairs):
     """
     Return a correctly ordered dataframe, ready to be plotted in chord format
     @ Args:
-    - nodes: a dictionary that associates to each unique nodes a category name
-    - links: link nodes together
-    - order: order of the categories
+    data: pd.DataFrame() to reorder, with a column
+    `categories` and a column `pair`
     """
-    categories = list(set(nodes.values()))
-    ndsnb = dict(zip(nodes.keys(), range(len(nodes))))
-    
-    # decide on the order
-    if(order is None):
-        order = sorted(categories)
-    df = pd.Series(nodes).to_frame("categorie")
-    df["nbcat"] = df.categorie.map(dict(zip(order, range(len(order)))))
-
-    df = df.rename_axis('source').reset_index()
-    df["nbsource"] = df.source.map(ndsnb)
-    
-    dict_links = {}
-    for l1, l2 in links:
-        dict_links[l1] = l2
-        dict_links[l2] = l1
-        
-    df["target"] = df.source.map(dict_links)
-    df["nbtarget"] = df.target.map(ndsnb)
-    df["tgt_nbcat"] = df.target.map(df.set_index("source").nbcat)
-
-    df["tgt_cat_order"] = df.apply(
-        lambda r: (len(order)-1+r["nbcat"]-r["tgt_nbcat"]) % (len(order)-1),
+    df, mapcat = process_data(data, categories, pairs)
+    df["associate_cat_order"] = df.apply(
+        lambda r: (len(mapcat)+r["nbcat"]-r["associate_nbcat"]) % len(mapcat)
+        + (len(mapcat)//2+1 if r["nbcat"]==r["associate_nbcat"] else 0.5),
         axis=1)
     df["sort_order"] = df.apply(
-        lambda r: (r["nbsource"] if r["nbcat"] <= r["tgt_nbcat"]
-                   else -r["nbtarget"]),
+        lambda r: (r["idx"] if r["nbcat"] <= r["associate_nbcat"]
+                   else -r["associate"]),
         axis=1)
-    df = df.sort_values(by=["nbcat", "tgt_cat_order", "sort_order"])
-    return df
-   
-    
-def chord_diagram(source, target, hue="black", data=None, ax=None,
-                  hue_order=None, palette=sns.color_palette(),
-                  categorie_internal_chords=False, sub_circle=False,
-                  spacing=0, spacing_sub=0, inverted=False,
-                  precision_chord=100, precision_circle=100,
-                  thickness_circle=0.1, thickness_sub_circle=0.05,
-                  radius_text=1.1, no_chords=False, circle_args={},
-                  text_args={}, chord_args={}):
-    """ Draw a chord diagram
-    @ Arguments:
-    - source: A unique index for each of the chords. The order
-    of these index will determine the order of the chord on the
-    circle (starting at (1,0)). If data is not None, can be a column
-    name, else should be an array.
-    - target: The index to which the source are attached. If data is
-    not None can be a column name, else should be an array.
-    - hue: Can be either a color name, a column name (if data is not
-    None), or an array. In the two last case, the color are given 
-    by palette in order.
-    - hue_order: The order in which the hue should be drawn
-    - data: None or a dataframe containing columns source and target
-    - ax: matplotlib.ax object in which to draw. If None, a figure 
-    is created.
-    - palette: the color palette used, if categorical data (default,
-    seaborn default)
-    - precision_chord: roughly the number of dot used to draw the chord
-    bigger = slower but prettier
-    - precision_circle: roughly the number of dot used to draw the circle
-    bigger = slower but prettier
-    - thickness_circle: thickness of the circle at the boundary
-    - no_chords: if true don't draw the chords
-    - radius_text: distance between the text and the center of the circle
-    - categorie_internal_chords: if False does not draw a chord that
-    start and end in the same categorie.
-    - circle_args: argument of the ax.fill matplotlib function that
-    draws the border of the circle.
-    - text_args: argument of the ax.text matplotlib function that 
-    draws the text.
-    - chords_args: argument of the LineCollection function that
-    draws the chords of the diagram.
+    df = df.sort_values(by=["nbcat", "associate_cat_order", "sort_order"])
+    return df, mapcat
+
+
+def process_data(data, categories, pairs, space_cat=None):
     """
-    if data is not None:
-        source = data[source].values
-        target = data[target].values
-        if hue in data.keys():
-            hue = data[hue].values
+    Process the dataframe so that it can be plotted in chord format
+    @ Args:
+    data: pd.DataFrame() to reorder, with a column
+    `categories` and a column `pair`
+    """
+    if space_cat is None:
+        space_cat = categories
+    df = data[list(set([categories, pairs, space_cat]))].copy()
+    catunique = df[categories].unique()
+    mapcat = dict(zip(catunique, range(len(catunique))))
+    df["nbcat"] = df[categories].map(mapcat).astype(int)
+    df["idx"] = df.index
+    pairorder = df.sort_values(by=pairs)
+    pairmap = dict(zip(list(pairorder.index[0::2]) +
+                       list(pairorder.index[1::2]),
+                       list(pairorder.index[1::2]) +
+                       list(pairorder.index[0::2])))
+    df["associate"] = df.index.map(pairmap)
+    df["associate_nbcat"] = df.associate.map(df.nbcat)
+    df["associate"] = df.index.map(pairmap)
+    df["associate_nbcat"] = df.associate.map(df.nbcat)
+    df["nbcat_spacing"] = df[space_cat].astype('category').cat.codes
+    df["nbcat_dbl"] = df.apply(lambda r: (r[space_cat], r[categories]),
+                               axis=1).astype('category').cat.codes
+    df["associate_nbcat_dbl"] = df.associate.map(df.nbcat_dbl)
+    return df, mapcat
 
-    if hue_order is None:
-        hue_order = list(dict.fromkeys(hue))    
-    nodes = dict(zip(source, hue))
 
-    links = list(zip(source, target))
-    df = order_data(nodes, links, hue_order)
-    
-    idxs = list(np.where(df.nbcat.values[:-1] != df.nbcat.values[1:])[0])
+def chord_diagram(categories, pair,
+                  data=None, ax=None, palette=sns.color_palette(),
+                  layout_args={}, text_args={}, chord_args={}):
+    """ Draw a chord diagram.
+        @ Args
+        - categories: Categories of each individual.
+        Either a list or a column name if `data` is not None.
+        - pair: For each individual identifies the pair it's in.
+        Every value should appear twice. Either a list or a column
+        name if `data` is not None.
+        - data: dataset containing the columns `categories` and `pair`
+        - ax: matplotlib ax object
+        - palette: seaborn palette
+        - layout_args: dict arguments for the layout, include:
+            * 'spacing' (default 0): space between the categories
+            * precision_chord: precision to plot the chord,
+                               higher = better but slower.
+            * precision_circle: same for the circles
+            * subcircle: presence or not of a subcircle (see examples)
+            * thickness_circle, thickness_subcircle: width of the circle / subcircle (default 0.1)
+            * radius_circle, radius_subcircle: radii of both circles
+            * internal_chords: Plot or not the internal chords (default `False`)
+            * radius_text: radius of the text
+            * no_chords: Don't plot the chords (good for testing, default `False`)
+            * inverted_grad: Inverse the gradient on the chords (default `True`)
+            * circle_args / subcircle_args: dict, default `{}`, additional arguement for ax.fill
+    """
+
+    if data is None:
+        data_copy = pd.DataFrame()
+        data_copy["cat"] = categories
+        data_copy["pair"] = pair
+        categories = "cat"
+        pair = "pair"
+    else:
+        data_copy = data.copy()
+
+    if not np.all(data_copy[pair].value_counts() == 2):
+        raise TypeError("Every value in the `pair` column "
+                        "should appear exactly twice")
+
+    df, mapcat = order_data(data_copy, categories, pair)
+    data_copy = data_copy.reindex(df.index)
+    plot_diagram(df, mapcat, ax, palette, layout_args,
+                 text_args, chord_args)
+    return data_copy
+
+def colored_chords(data, pair, categories, hue, ax=None,
+                   palette=sns.color_palette(), legend=True,
+                   layout_args={}, text_args={}, chord_args={},
+                   legend_args={}):
+    """ Plot a chord diagram from the data. Don't reorder the data.
+        @ Args
+        - categories: Categories of each individual.
+        Either a list or a column name if `data` is not None.
+        - hue: Color associated to each individual.
+        Either a list or a column name if `data` is not None.
+        - pair: For each individual identifies the pair it's in.
+        Every value should appear twice. Either a list or a column
+        name if `data` is not None.
+        - data: dataset containing the columns `categories` and `pair`
+        - ax: matplotlib ax object
+        - palette: seaborn palette
+        - layout_args: dict arguments for the layout, include:
+            * 'spacing' (default 0): space between the categories
+            * precision_chord: precision to plot the chord,
+                               higher = better but slower.
+            * precision_circle: same for the circles
+            * subcircle: presence or not of a subcircle (see examples)
+            * thickness_circle, thickness_subcircle: width of the circle / subcircle (default 0.1)
+            * radius_circle, radius_subcircle: radii of both circles
+            * internal_chords: Plot or not the internal chords (default `False`)
+            * radius_text: radius of the text
+            * no_chords: Don't plot the chords (good for testing, default `False`)
+            * inverted_grad: Inverse the gradient on the chords (default `True`)
+            * circle_args / subcircle_args: dict, default `{}`, additional arguement for ax.fill
+    """
+    if text_args == {}:
+        text_args['visible'] = False
+    if 'radius_text' not in layout_args:
+        layout_args['radius_text'] = 0
+    if 'inverted_grad' not in layout_args:
+        layout_args['inverted_grad'] = False
+    if 'subcircle' not in layout_args:
+        layout_args['subcircle'] = False
+    df, mapcat = process_data(data, hue, pair, space_cat=categories)
+    ax = plot_diagram(df, mapcat, ax, palette=palette,
+                 layout_args=layout_args, text_args=text_args,
+                 chord_args=chord_args)
+    if legend:
+        if 'linewidth' not in legend_args:
+            legend_args['linewidth'] = 4
+        if 'bbox_to_anchor' not in legend_args:
+            legend_args['bbox_to_anchor']=(1.2,1)
+        if 'loc' not in legend_args:
+            legend_args['loc'] = 'upper right'
+
+        custom_lines = [Line2D([0], [0], color=palette[mapcat[c]],
+                               lw=legend_args['linewidth']) for c in mapcat]
+        del legend_args['linewidth']
+        ax.legend(custom_lines, [c for c in mapcat], **legend_args)
+
+
+
+
+def plot_diagram(df, mapcat, ax=None, palette=sns.color_palette(),
+                 layout_args={}, text_args={}, chord_args={}):
+    """ Internal function, plot chord diagram
+    """
+    if 'spacing' not in layout_args:
+        layout_args['spacing'] = 0
+    if 'precision_chord' not in layout_args:
+        layout_args['precision_chord'] = 100
+    if 'precision_circle' not in layout_args:
+        layout_args['precision_circle'] = 100
+    if 'thickness_circle' not in layout_args:
+        layout_args['thickness_circle'] = 0.1
+    if 'subcircle' not in layout_args:
+        layout_args['subcircle'] = True
+    if 'radius_subcircle' not in layout_args:
+        layout_args['radius_subcircle'] = 1.14
+    if 'radius_circle' not in layout_args:
+        layout_args['radius_circle'] = 1.02
+    if 'thickness_subcircle' not in layout_args:
+        layout_args['thickness_subcircle'] = 0.1
+    if 'internal_chords' not in layout_args:
+        layout_args['internal_chords'] = False
+    if 'radius_text' not in layout_args:
+        layout_args['radius_text'] = max(layout_args['thickness_subcircle']
+                                         + layout_args['radius_subcircle'],
+                                         layout_args['thickness_circle']
+                                         + layout_args['radius_circle']) + 0.1
+    if 'no_chords' not in layout_args:
+        layout_args['no_chords'] = False
+    if 'inverted_grad' not in layout_args:
+        layout_args['inverted_grad'] = True
+    if 'circle_args' not in layout_args:
+        layout_args['circle_args'] = {}
+    if 'subcircle_args' not in layout_args:
+        layout_args['subcircle_args'] = {}
+
+
+    cat_jump = list(np.where(df.nbcat_spacing.values[:-1] != df.nbcat_spacing.values[1:])[0])
     x = 0
     positions = []
     for i in range(len(df)):
         positions.append(x)
-        if i in idxs:
-            x += spacing
-        x += (1 - spacing*(len(idxs)+1))/(len(df))
+        if i in cat_jump:
+            x += layout_args['spacing']
+        x += (1 - layout_args['spacing']*(len(cat_jump)+1))/(len(df))
     df["position"] = positions
-    df["tgt_position"] = df.target.map(df.set_index("source").position)
-        
-    if(len(palette) < len(hue_order)):
+    df["associate_position"] = df.associate.map(df.position)
+
+    nbcategories = df.nbcat.nunique()
+    if len(palette) < nbcategories:
         warnings.warn("Not enough colors in the palette ({} needed), switching "
-                      "to Seaborn husl palette.".format(len(hue_order)))
-        palette = sns.color_palette("husl", len(order))
+                      "to Seaborn husl palette.".format(nbcategories))
+        palette = sns.color_palette("husl", nbcategories)
 
-    if(ax is None):
-        fig, ax = plt.subplots()
+    if ax is None:
+        _, ax = plt.subplots(figsize=(8, 8))
+        ax.axis('off')
 
-    nb_to_name_cat = dict(enumerate(hue_order))
+    nb_to_name_cat = {mapcat[k]:k for k in mapcat}
     positions = df.position.values
-    tgt_cat = df.nbcat.values
+    tgt_cat = df.nbcat_dbl.values
     idxs = np.where(tgt_cat[:-1] != tgt_cat[1:])[0]
     start_categorie = [0] + list(positions[idxs+1])
     end_categorie = list(positions[idxs]) + [positions[-1]]
-    cats = [tgt_cat[0]] + list(tgt_cat[idxs+1])
-    
+    vcat = df.nbcat
+    cats = [vcat[0]] + list(vcat.iloc[idxs+1])
+
     for s, e, c in zip(start_categorie, end_categorie, cats):
         draw_arc_circle(s - 0.5/len(df), e + 0.5/len(df), color=palette[c], ax=ax,
-                        precision=precision_circle, thickness=thickness_circle,
-                        radius=(1+thickness_sub_circle + spacing_sub*2*math.pi if inverted else 1),**circle_args)
-        add_text_circle((s + e - 1/len(df))/2, nb_to_name_cat[c], ax=ax, color=palette[c], radius=radius_text, **text_args)
+                        precision=layout_args['precision_circle'],
+                        thickness=layout_args['thickness_circle'],
+                        radius=layout_args['radius_circle'], **layout_args['circle_args'])
+        add_text_circle((s + e - 1/len(df))/2, nb_to_name_cat[c], ax=ax,
+                        color=palette[c],
+                        radius=layout_args['radius_text'],
+                        **text_args)
 
-    if sub_circle:
-        df["both_cat"] = df.apply(lambda r: str(r["nbcat"]) + "_" + str(r["tgt_nbcat"]), axis=1)
-        positions = df.position.values
-        tgt_cat = df.both_cat.values
-        idxs = np.where(tgt_cat[:-1] != tgt_cat[1:])[0]
-        start_categorie = [0] + list(positions[idxs+1])
-        end_categorie = list(positions[idxs]) + [positions[-1]]
-        subcat = [df.tgt_nbcat.values[0]] + list(df.tgt_nbcat.values[idxs+1])
-        for s, e, c in zip(start_categorie, end_categorie, subcat):
-            draw_arc_circle(s-0.5/len(df), e + 0.5/len(df), color=palette[c], ax=ax, precision=precision_circle,
-                            thickness=thickness_sub_circle,
-                            radius=(1 if inverted else 1+thickness_circle+spacing_sub*2*math.pi), **circle_args)
+    if layout_args['subcircle']:
+        src_cat = df.associate_nbcat_dbl.values
+        idxs = np.where(src_cat[:-1] != src_cat[1:])[0]
+        start_subcategorie = [0] + list(positions[idxs+1])
+        end_subcategorie = list(positions[idxs]) + [positions[-1]]
+        vcat = df.associate_nbcat
+        subcats = [vcat[0]] + list(vcat.iloc[idxs+1])
 
-        
-    for jj, src_p, tgt_p, src_c, tgt_c in zip(range(len(df)), df["position"].values, 
-                                          df["tgt_position"].values,
-                                          df["nbcat"].values, 
-                                          df["tgt_nbcat"].values):
-        if not (no_chords or (src_p == tgt_p or (not categorie_internal_chords and src_c == tgt_c))):
+        for s, e, c in zip(start_subcategorie, end_subcategorie, subcats):
+            draw_arc_circle(s - 0.5/len(df), e + 0.5/len(df), color=palette[c], ax=ax,
+                            precision=layout_args['precision_circle'],
+                            thickness=layout_args['thickness_subcircle'],
+                            radius=layout_args['radius_subcircle'],
+                            **layout_args['subcircle_args'])
+
+    for src_p, tgt_p, src_c, tgt_c in zip(df.position,
+                                          df.associate_position,
+                                          df.nbcat,
+                                          df.associate_nbcat):
+        if not (layout_args['no_chords'] or
+                (src_p == tgt_p or
+                 (not layout_args['internal_chords'] and src_c == tgt_c))):
             draw_chord(position_circle(src_p),
-                        position_circle(tgt_p), ax=ax,
-                        color_start=palette[(tgt_c if inverted else src_c)],
-                        color_end=palette[(src_c if inverted else tgt_c)],
-                        precision=precision_chord,
-                        **chord_args)
+                       position_circle(tgt_p), ax=ax,
+                       color_start=palette[tgt_c
+                                           if layout_args['inverted_grad']
+                                           else src_c],
+                       color_end=palette[src_c
+                                         if layout_args['inverted_grad']
+                                         else tgt_c],
+                       precision=layout_args['precision_chord'],
+                       **chord_args)
 
     ax.set_xlim(-1, 1)
     ax.set_ylim(-1, 1)
     ax.axis('equal')
     ax.axis('off')
-    return df
+    return ax
