@@ -1,6 +1,8 @@
 # Chordialement
 
-Chord diagrams ('circos') can be used to visualize a very specific type of dataset. The data should contain observations that fall in discrete categories and have pairwise, but ideally bidirectional, association between observations. Say a dataset containing information about twins' political opinions, or couples favourite musical genre.  
+![test/example_chord.png](Example of a chord diagram)
+
+Chord diagrams ('circos') can be used to visualize a very specific type of dataset. The data should contain observations that fall in discrete categories and have pairwise, but ideally bidirectional, association between observations. Say a dataset containing information about twins' political opinions, or couples favourite fruits.  
 
 In most cases, these plots don't bring more information than a triangular [jointplot](https://seaborn.pydata.org/generated/seaborn.jointplot.html). But they are arguably prettier and allow to show individual observation. It can also be easier to add more information to the plot (by modifying the width & color of the link for example). 
 
@@ -26,8 +28,7 @@ data, ax = colored_chords(data, pair="couple", categories="favourite_fruit",
                           hue="Like Potatoes", layout_args={'spacing':0.02, 'internal_chords': True})
 
 ```
-
-![test/example_chords.png](Example of a chord diagram)
-![test/example_chords_2.png](Example of a colored chord diagram)
+![test/example_chord.png](Example of a chord diagram)
+![test/example_chord_2.png](Example of a colored chord diagram)
 
 ```
