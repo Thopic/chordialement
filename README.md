@@ -1,6 +1,6 @@
 # Chordialement
 
-![test/example_chord.png](Example of a chord diagram)
+![Example of a chord diagram](test/example_chord.png)
 
 Chord diagrams ('circos') can be used to visualize a very specific type of dataset. The data should contain observations that fall in discrete categories and have pairwise, but ideally bidirectional, association between observations. Say a dataset containing information about twins' political opinions, or couples favourite fruits.  
 
@@ -8,8 +8,16 @@ In most cases, these plots don't bring more information than a triangular [joint
 
 This package is another attempt to make them easy to plot. Similar tentatives include [Circos](http://circos.ca), [Chord](https://pypi.org/project/chord/), [Bokeh](https://bokeh.org) and [plotly](https://plotly.org). I wanted a pure python one, based on matplotlib, and personalizable so this is it.
 
+## Install
+
+``` sh
+git clone git@github.com:Thopic/chordialement.git
+pip install -r .
+```
 
 ## Example.
+
+The `chord_diagram` function plot a diagram colored by categories (ie the color of the lines match the ordering). The `colored_chords` function add a `hue` parameter so you can choose the color independantly of the ordering, but it doesn't order the data correctly, so `chord_diagram` must be ran first.
 
 ``` python
 import pandas as pd
@@ -31,4 +39,3 @@ data, ax = colored_chords(data, pair="couple", categories="favourite_fruit",
 ![Example of a chord diagram](test/example_chord.png)
 ![Example of a colored chord diagram](test/example_chord_2.png)
 
-```
