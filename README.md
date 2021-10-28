@@ -28,7 +28,7 @@ data, ax = colored_chords(data, pair="couple", categories="favourite_fruit",
                           hue="Like Potatoes", layout_args={'spacing':0.02, 'internal_chords': True})
 
 ```
-![test/example_chord.png](Example of a chord diagram)
-![test/example_chord_2.png](Example of a colored chord diagram)
+![Example of a chord diagram](test/example_chord.png)
+![Example of a colored chord diagram](test/example_chord_2.png)
 
 ```
