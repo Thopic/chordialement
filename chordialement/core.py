@@ -100,9 +100,11 @@ def order_data(data, categories, pairs):
         axis=1)
     df["sort_order"] = df.apply(
         lambda r: (r["idx"] if r["nbcat"] <= r["associate_nbcat"]
-                   else -r["associate"]),
-        axis=1)
-    df = df.sort_values(by=["nbcat", "associate_cat_order", "sort_order"])
+                   else -r["associate"]), axis=1)
+    df["internal_sort"] = df.apply(lambda r: (0 if r["nbcat"] != r["associate_nbcat"]
+                                  else (r["idx"] if r["idx"] < r["associate"]
+                                   else -r["associate"])), axis=1)
+    df = df.sort_values(by=["nbcat", "associate_cat_order", "internal_sort", "sort_order"])
     return df, mapcat
 
 
@@ -115,7 +117,7 @@ def process_data(data, categories, pairs, space_cat=None):
     """
     if space_cat is None:
         space_cat = categories
-    df = data[list(set([categories, pairs, space_cat]))].copy()
+    df = data[list(set([categories, pairs, space_cat]))].reset_index().copy()
     catunique = df[categories].unique()
     mapcat = dict(zip(catunique, range(len(catunique))))
     df["nbcat"] = df[categories].map(mapcat).astype(int)
@@ -181,7 +183,7 @@ def chord_diagram(categories, pair,
     data_copy = data_copy.reindex(df.index)
     plot_diagram(df, mapcat, ax, palette, layout_args,
                  text_args, chord_args)
-    return data_copy
+    return data_copy, ax
 
 def colored_chords(data, pair, categories, hue, ax=None,
                    palette=sns.color_palette(), legend=True,
@@ -236,8 +238,8 @@ def colored_chords(data, pair, categories, hue, ax=None,
         custom_lines = [Line2D([0], [0], color=palette[mapcat[c]],
                                lw=legend_args['linewidth']) for c in mapcat]
         del legend_args['linewidth']
-        ax.legend(custom_lines, [c for c in mapcat], **legend_args)
-
+        ax.legend(custom_lines, [c for c in mapcat], title=hue, **legend_args)
+    return data, ax
 
 
 
@@ -333,13 +335,15 @@ def plot_diagram(df, mapcat, ax=None, palette=sns.color_palette(),
                             radius=layout_args['radius_subcircle'],
                             **layout_args['subcircle_args'])
 
-    for src_p, tgt_p, src_c, tgt_c in zip(df.position,
+    for src_p, tgt_p, src_c, tgt_c, sdc, tdc in zip(df.position,
                                           df.associate_position,
                                           df.nbcat,
-                                          df.associate_nbcat):
+                                          df.associate_nbcat,
+                                          df.nbcat_dbl,
+                                          df.associate_nbcat_dbl):
         if not (layout_args['no_chords'] or
                 (src_p == tgt_p or
-                 (not layout_args['internal_chords'] and src_c == tgt_c))):
+                 (not layout_args['internal_chords'] and sdc == tdc))):
             draw_chord(position_circle(src_p),
                        position_circle(tgt_p), ax=ax,
                        color_start=palette[tgt_c
