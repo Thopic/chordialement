@@ -376,7 +376,7 @@ def chord_diagram(categories, pairs, hues=None,
     if 'nuplets' not in layout_args:
         layout_args['nuplets'] = False
     if 'plot' not in layout_args:
-        layout_args['plot'] = False
+        layout_args['plot'] = True
     if layout_args['nuplets']:
         layout_args['singletons'] = True
 
