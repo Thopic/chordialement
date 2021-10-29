@@ -1,1 +1,1 @@
-from .core import chord_diagram, colored_chords
+from .core import chord_diagram, Chords
